@@ -47,12 +47,10 @@ function presentRsvp(
   deadline?: string | null,
 ) {
   if (!rsvp) return null;
-  const raw = typeof (rsvp as { toObject?: () => Record<string, unknown> }).toObject === 'function'
-    ? (rsvp as { toObject: () => Record<string, unknown> }).toObject()
-    : (rsvp as Record<string, unknown>);
-  const afterDeadline = Object.prototype.hasOwnProperty.call(raw, 'afterDeadline')
-    ? Boolean(raw.afterDeadline)
-    : Boolean(deadline && rsvp.createdAt && deadlineHasPassed(deadline, new Date(rsvp.createdAt).getTime()));
+  const afterDeadline =
+    typeof rsvp.afterDeadline === 'boolean'
+      ? rsvp.afterDeadline
+      : Boolean(deadline && rsvp.createdAt && deadlineHasPassed(deadline, new Date(rsvp.createdAt).getTime()));
   return {
     attendance: rsvp.attendance,
     confirmedCount: rsvp.confirmedCount,
