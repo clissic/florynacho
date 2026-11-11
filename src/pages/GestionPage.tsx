@@ -823,23 +823,25 @@ export function GestionPage() {
               <p className="eyebrow">Canciones</p>
               <h2>Lo que pidieron</h2>
             </div>
-            <button
-              type="button"
-              className="btn btn-outline-primary button button-secondary"
-              disabled={songs.length === 0}
-              onClick={() =>
-                downloadCsv(
-                  'canciones-florencia-ignacio.csv',
-                  toCsv(
-                    ['invitado', 'cancion', 'artista', 'comentario', 'enlace', 'fecha'],
-                    songs.map((song) => [song.guestName, song.title, song.artist, song.comment, song.link, formatDateTime(song.createdAt)]),
-                  ),
-                )
-              }
-            >
-              <Icon name="download" />
-              Exportar CSV
-            </button>
+            <div className="canvas-tools">
+              <button
+                type="button"
+                className="canvas-tool"
+                disabled={songs.length === 0}
+                onClick={() =>
+                  downloadCsv(
+                    'canciones-florencia-ignacio.csv',
+                    toCsv(
+                      ['invitado', 'cancion', 'artista', 'comentario', 'enlace', 'fecha'],
+                      songs.map((song) => [song.guestName, song.title, song.artist, song.comment, song.link, formatDateTime(song.createdAt)]),
+                    ),
+                  )
+                }
+              >
+                <Icon name="download" />
+                Exportar
+              </button>
+            </div>
           </header>
           {songs.length ? (
             <>
@@ -896,23 +898,25 @@ export function GestionPage() {
               <p className="eyebrow">Mensajes</p>
               <h2>Para los novios</h2>
             </div>
-            <button
-              type="button"
-              className="btn btn-outline-primary button button-secondary"
-              disabled={messages.length === 0}
-              onClick={() =>
-                downloadCsv(
-                  'mensajes-florencia-ignacio.csv',
-                  toCsv(
-                    ['autores', 'mensaje', 'fecha'],
-                    messages.map((message) => [authorsLabel(message.authors), message.body, formatDateTime(message.updatedAt)]),
-                  ),
-                )
-              }
-            >
-              <Icon name="download" />
-              Exportar CSV
-            </button>
+            <div className="canvas-tools">
+              <button
+                type="button"
+                className="canvas-tool"
+                disabled={messages.length === 0}
+                onClick={() =>
+                  downloadCsv(
+                    'mensajes-florencia-ignacio.csv',
+                    toCsv(
+                      ['autores', 'mensaje', 'fecha'],
+                      messages.map((message) => [authorsLabel(message.authors), message.body, formatDateTime(message.updatedAt)]),
+                    ),
+                  )
+                }
+              >
+                <Icon name="download" />
+                Exportar
+              </button>
+            </div>
           </header>
           {messages.length ? (
             <>
@@ -953,9 +957,7 @@ export function GestionPage() {
           )}
         </section>
       ) : section === 'personalizar' ? (
-        <section className="canvas-section">
-          <ContentPanel />
-        </section>
+        <ContentPanel />
       ) : section === 'validacion' && features.entryPass ? (
         <ValidationBoard api={api} pendingToken={entrada} />
       ) : section === 'administracion' ? (
