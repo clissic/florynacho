@@ -261,12 +261,24 @@ export function GestionPage() {
     });
   }, [guests, nameQuery, dietary, attendance, children, allergiesOnly]);
 
+  const notices = useMemo(
+    () => buildNotices({ guests, songs, messages, deadline: formFlags.deadline }),
+    [guests, songs, messages, formFlags.deadline],
+  );
+
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pages);
   const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
   const songPages = Math.max(1, Math.ceil(songs.length / PAGE_SIZE));
   const currentSongPage = Math.min(songPage, songPages);
   const visibleSongs = songs.slice((currentSongPage - 1) * PAGE_SIZE, currentSongPage * PAGE_SIZE);
+  const dropdown = dropdownNotices(notices, noticePrefs);
+  const unseen = unreadCount(notices, noticePrefs);
+  const confirmationsClosed = deadlineHasPassed(formFlags.deadline);
+  const stats = summarizeGuests(guests.map((guest) => ({ status: guest.status, rsvp: guest.rsvp })));
+  const messagePages = Math.max(1, Math.ceil(messages.length / MESSAGE_PAGE_SIZE));
+  const currentMessagePage = Math.min(messagePage, messagePages);
+  const visibleMessages = messages.slice((currentMessagePage - 1) * MESSAGE_PAGE_SIZE, currentMessagePage * MESSAGE_PAGE_SIZE);
 
   function beginCreate() {
     setEditing(null);
@@ -291,15 +303,6 @@ export function GestionPage() {
   if (!api) return <SetupNotice />;
   if (email === undefined && !error) return <p className="loading">Cargando…</p>;
   if (!email) return <Navigate to={`/admin/login?next=${encodeURIComponent(entrada ? `/gestion?entrada=${entrada}` : '/gestion')}`} replace />;
-
-  const confirmationsClosed = deadlineHasPassed(formFlags.deadline);
-  const stats = summarizeGuests(guests.map((guest) => ({ status: guest.status, rsvp: guest.rsvp })));
-  const notices = useMemo(
-    () => buildNotices({ guests, songs, messages, deadline: formFlags.deadline }),
-    [guests, songs, messages, formFlags.deadline],
-  );
-  const dropdown = dropdownNotices(notices, noticePrefs);
-  const unseen = unreadCount(notices, noticePrefs);
 
   function persistNoticePrefs(next: NoticePrefs) {
     setNoticePrefs(next);
@@ -335,10 +338,6 @@ export function GestionPage() {
     persistNoticePrefs(markSeen(noticePrefs, [notice.id]));
     openSection(notice.section);
   }
-
-  const messagePages = Math.max(1, Math.ceil(messages.length / MESSAGE_PAGE_SIZE));
-  const currentMessagePage = Math.min(messagePage, messagePages);
-  const visibleMessages = messages.slice((currentMessagePage - 1) * MESSAGE_PAGE_SIZE, currentMessagePage * MESSAGE_PAGE_SIZE);
 
   return (
     <div className="admin platform">
