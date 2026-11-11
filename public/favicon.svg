@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Florencia e Ignacio">
+  <rect width="64" height="64" rx="14" fill="#f6f1e7"/>
+  <path d="M32 50c-8-6-16-12-16-20a8 8 0 0 1 14-5 8 8 0 0 1 14 5c0 8-8 14-12 20z" fill="none" stroke="#1c3144" stroke-width="2.2"/>
+  <circle cx="24" cy="22" r="2" fill="#7ba3be"/>
+  <circle cx="40" cy="22" r="2" fill="#7ba3be"/>
+</svg>
