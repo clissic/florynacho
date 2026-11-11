@@ -2300,8 +2300,10 @@ fieldset {
 .platform-notice-icon {
   display: grid;
   place-items: center;
+  flex: 0 0 auto;
   width: 2.1rem;
   height: 2.1rem;
+  overflow: hidden;
   border-radius: 999px;
   background: var(--ivory);
   color: #16356e;
@@ -2316,7 +2318,12 @@ fieldset {
 .platform-notice-icon.is-message { color: #16356e; background: #ebe7fb; }
 
 .platform-notice-icon .material-symbols-outlined {
-  font-size: 1.15rem;
+  display: block;
+  width: 1.2rem;
+  height: 1.2rem;
+  overflow: hidden;
+  font-size: 1.2rem;
+  line-height: 1;
 }
 
 .platform-notice-copy,
@@ -2348,8 +2355,21 @@ fieldset {
 
 .platform-notice-actions {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 0.45rem;
+}
+
+.platform-notice-all {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.platform-notice-clear {
+  flex: 0 0 auto;
+  width: 2.6rem;
+  min-width: 2.6rem;
+  padding-inline: 0;
+  justify-content: center;
 }
 
 .platform-nav-count {

@@ -14,7 +14,6 @@ import { deadlineHasPassed, formatDateTime } from '../lib/dates';
 import type { FloorPlan, FloorSeatPerson, GuestRow, InvitationData, MessageRow, SongRow } from '../lib/models';
 import { seatKey } from '../lib/floor';
 import {
-  DROPDOWN_LIMIT,
   NOTICE_ICONS,
   buildNotices,
   dropdownNotices,
@@ -31,6 +30,7 @@ import { SetupNotice } from './SetupNotice';
 
 const PAGE_SIZE = 25;
 const MESSAGE_PAGE_SIZE = 10;
+const NOTICE_PAGE_SIZE = 10;
 
 type Section = 'resumen' | 'invitados' | 'mesas' | 'canciones' | 'mensajes' | 'personalizar' | 'validacion' | 'administracion' | 'notificaciones';
 
@@ -142,6 +142,7 @@ export function GestionPage() {
   const [guests, setGuests] = useState<GuestRow[]>([]);
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [messagePage, setMessagePage] = useState(1);
+  const [noticePage, setNoticePage] = useState(1);
   const [plan, setPlan] = useState<FloorPlan>(emptyPlan);
   const [nameQuery, setNameQuery] = useState('');
   const [dietary, setDietary] = useState('');
@@ -279,6 +280,9 @@ export function GestionPage() {
   const messagePages = Math.max(1, Math.ceil(messages.length / MESSAGE_PAGE_SIZE));
   const currentMessagePage = Math.min(messagePage, messagePages);
   const visibleMessages = messages.slice((currentMessagePage - 1) * MESSAGE_PAGE_SIZE, currentMessagePage * MESSAGE_PAGE_SIZE);
+  const noticePages = Math.max(1, Math.ceil(notices.length / NOTICE_PAGE_SIZE));
+  const currentNoticePage = Math.min(noticePage, noticePages);
+  const visibleNotices = notices.slice((currentNoticePage - 1) * NOTICE_PAGE_SIZE, currentNoticePage * NOTICE_PAGE_SIZE);
 
   function beginCreate() {
     setEditing(null);
@@ -314,6 +318,7 @@ export function GestionPage() {
     setMenuOpen(false);
     setNoticesOpen(false);
     if (next === 'notificaciones') {
+      setNoticePage(1);
       persistNoticePrefs(markSeen(noticePrefs, notices.map((notice) => notice.id)));
     }
   }
@@ -454,18 +459,21 @@ export function GestionPage() {
                   ))}
                 </ul>
                 <div className="platform-notice-actions">
-                  <button type="button" className="canvas-tool" onClick={() => openSection('notificaciones')}>
-                    <Icon name="list" />
+                  <button type="button" className="canvas-tool platform-notice-all" onClick={() => openSection('notificaciones')}>
+                    <Icon name="fact_check" />
                     Ver todas
                   </button>
-                  <button type="button" className="canvas-tool" disabled={dropdown.length === 0} onClick={clearDropdownNotices}>
+                  <button
+                    type="button"
+                    className="canvas-tool platform-notice-clear"
+                    aria-label="Eliminar del desplegable"
+                    title="Eliminar del desplegable"
+                    disabled={dropdown.length === 0}
+                    onClick={clearDropdownNotices}
+                  >
                     <Icon name="delete" />
-                    Limpiar
                   </button>
                 </div>
-                {notices.length > DROPDOWN_LIMIT ? (
-                  <p className="platform-notice-hint">Mostramos las últimas {DROPDOWN_LIMIT}. El historial completo está en Ver todas.</p>
-                ) : null}
               </div>
             ) : null}
           </div>
@@ -482,26 +490,39 @@ export function GestionPage() {
             </div>
           </header>
           {notices.length ? (
-            <ol className="notice-timeline">
-              {notices.map((notice) => {
-                const seen = noticePrefs.seenIds.includes(notice.id);
-                return (
-                  <li key={notice.id} className={seen ? 'is-seen' : 'is-new'}>
-                    <button type="button" className="notice-timeline-item" onClick={() => openNotice(notice)}>
-                      <span className={`platform-notice-icon is-${notice.kind}`} aria-hidden="true">
-                        <Icon name={NOTICE_ICONS[notice.kind]} />
-                      </span>
-                      <span className="notice-timeline-copy">
-                        <strong>{notice.title}</strong>
-                        <span>{notice.body}</span>
-                        <time dateTime={notice.at}>{formatDateTime(notice.at)}</time>
-                      </span>
-                      {!seen ? <span className="notice-new-dot" aria-label="Sin ver" /> : null}
-                    </button>
-                  </li>
-                );
-              })}
-            </ol>
+            <>
+              <ol className="notice-timeline">
+                {visibleNotices.map((notice) => {
+                  const seen = noticePrefs.seenIds.includes(notice.id);
+                  return (
+                    <li key={notice.id} className={seen ? 'is-seen' : 'is-new'}>
+                      <button type="button" className="notice-timeline-item" onClick={() => openNotice(notice)}>
+                        <span className={`platform-notice-icon is-${notice.kind}`} aria-hidden="true">
+                          <Icon name={NOTICE_ICONS[notice.kind]} />
+                        </span>
+                        <span className="notice-timeline-copy">
+                          <strong>{notice.title}</strong>
+                          <span>{notice.body}</span>
+                          <time dateTime={notice.at}>{formatDateTime(notice.at)}</time>
+                        </span>
+                        {!seen ? <span className="notice-new-dot" aria-label="Sin ver" /> : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+              <div className="canvas-pages">
+                <button type="button" className="icon-action" aria-label="Página anterior" disabled={currentNoticePage <= 1} onClick={() => setNoticePage(currentNoticePage - 1)}>
+                  <Icon name="arrow_back" />
+                </button>
+                <p>
+                  {notices.length} notificaciones · Página {currentNoticePage} de {noticePages}
+                </p>
+                <button type="button" className="icon-action" aria-label="Página siguiente" disabled={currentNoticePage >= noticePages} onClick={() => setNoticePage(currentNoticePage + 1)}>
+                  <Icon name="arrow_forward" />
+                </button>
+              </div>
+            </>
           ) : (
             <p className="hint">Todavía no hay notificaciones.</p>
           )}

@@ -24,9 +24,9 @@ const DROPDOWN_LIMIT = 10;
 
 export const NOTICE_ICONS: Record<NoticeKind, string> = {
   pending: 'hourglass_empty',
-  confirmed: 'check_circle',
-  declined: 'cancel',
-  late: 'event_busy',
+  confirmed: 'check',
+  declined: 'close',
+  late: 'priority_high',
   song: 'music_note',
   message: 'mail',
   deadline: 'schedule',

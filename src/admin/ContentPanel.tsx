@@ -131,7 +131,7 @@ export function ContentPanel() {
               }
             }}
           >
-            <Icon name="publish" />
+            <Icon name="done_all" />
             Publicar
           </button>
         </div>
@@ -380,10 +380,10 @@ export function ContentPanel() {
                 </label>
                 <div className="gallery-edit-actions">
                   <button type="button" className="icon-action" aria-label="Subir" title="Subir" disabled={index === 0} onClick={() => move(index, -1)}>
-                    <Icon name="arrow_upward" />
+                    <Icon name="arrow_back" />
                   </button>
                   <button type="button" className="icon-action" aria-label="Bajar" title="Bajar" disabled={index === draft.gallery.length - 1} onClick={() => move(index, 1)}>
-                    <Icon name="arrow_downward" />
+                    <Icon name="arrow_forward" />
                   </button>
                   <button
                     type="button"
@@ -403,7 +403,7 @@ export function ContentPanel() {
             ))}
           </div>
           <label className="canvas-tool customize-file">
-            <Icon name="add_photo_alternate" />
+            <Icon name="photo_camera" />
             Agregar fotografía
             <input
               type="file"
