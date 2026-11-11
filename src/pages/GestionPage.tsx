@@ -13,13 +13,26 @@ import { downloadCsv, parseGuestCsv, toCsv } from '../lib/csv';
 import { deadlineHasPassed, formatDateTime } from '../lib/dates';
 import type { FloorPlan, FloorSeatPerson, GuestRow, InvitationData, MessageRow, SongRow } from '../lib/models';
 import { seatKey } from '../lib/floor';
+import {
+  DROPDOWN_LIMIT,
+  NOTICE_ICONS,
+  buildNotices,
+  dropdownNotices,
+  hideFromDropdown,
+  loadNoticePrefs,
+  markSeen,
+  saveNoticePrefs,
+  unreadCount,
+  type AppNotice,
+  type NoticePrefs,
+} from '../lib/notices';
 import { dietaryLabel, summarizeGuests } from '../lib/stats';
 import { SetupNotice } from './SetupNotice';
 
 const PAGE_SIZE = 25;
 const MESSAGE_PAGE_SIZE = 10;
 
-type Section = 'resumen' | 'invitados' | 'mesas' | 'canciones' | 'mensajes' | 'personalizar' | 'validacion' | 'administracion';
+type Section = 'resumen' | 'invitados' | 'mesas' | 'canciones' | 'mensajes' | 'personalizar' | 'validacion' | 'administracion' | 'notificaciones';
 
 function authorsLabel(authors: string[]) {
   if (authors.length <= 1) return authors[0] || 'Invitado';
@@ -148,6 +161,7 @@ export function GestionPage() {
   const [songs, setSongs] = useState<SongRow[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [noticesOpen, setNoticesOpen] = useState(false);
+  const [noticePrefs, setNoticePrefs] = useState<NoticePrefs>(() => loadNoticePrefs());
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<GuestRow | null>(null);
   const [response, setResponse] = useState<InvitationData | null>(null);
@@ -278,14 +292,48 @@ export function GestionPage() {
   if (email === undefined && !error) return <p className="loading">Cargando…</p>;
   if (!email) return <Navigate to={`/admin/login?next=${encodeURIComponent(entrada ? `/gestion?entrada=${entrada}` : '/gestion')}`} replace />;
 
-  const pending = guests.filter((guest) => guest.status === 'active' && !guest.rsvp);
   const confirmationsClosed = deadlineHasPassed(formFlags.deadline);
   const stats = summarizeGuests(guests.map((guest) => ({ status: guest.status, rsvp: guest.rsvp })));
+  const notices = useMemo(
+    () => buildNotices({ guests, songs, messages, deadline: formFlags.deadline }),
+    [guests, songs, messages, formFlags.deadline],
+  );
+  const dropdown = dropdownNotices(notices, noticePrefs);
+  const unseen = unreadCount(notices, noticePrefs);
+
+  function persistNoticePrefs(next: NoticePrefs) {
+    setNoticePrefs(next);
+    saveNoticePrefs(next);
+  }
 
   function openSection(next: Section) {
     setSection(next);
     setMenuOpen(false);
     setNoticesOpen(false);
+    if (next === 'notificaciones') {
+      persistNoticePrefs(markSeen(noticePrefs, notices.map((notice) => notice.id)));
+    }
+  }
+
+  function toggleNotices() {
+    setNoticesOpen((open) => {
+      const nextOpen = !open;
+      if (nextOpen) {
+        const visible = dropdownNotices(notices, noticePrefs);
+        persistNoticePrefs(markSeen(noticePrefs, visible.map((notice) => notice.id)));
+      }
+      return nextOpen;
+    });
+  }
+
+  function clearDropdownNotices() {
+    const visible = dropdownNotices(notices, noticePrefs);
+    persistNoticePrefs(hideFromDropdown(markSeen(noticePrefs, visible.map((notice) => notice.id)), visible.map((notice) => notice.id)));
+  }
+
+  function openNotice(notice: AppNotice) {
+    persistNoticePrefs(markSeen(noticePrefs, [notice.id]));
+    openSection(notice.section);
   }
 
   const messagePages = Math.max(1, Math.ceil(messages.length / MESSAGE_PAGE_SIZE));
@@ -341,6 +389,11 @@ export function GestionPage() {
           </button>
         </nav>
         <div className="platform-side-foot">
+          <button type="button" className={section === 'notificaciones' ? 'is-on' : ''} onClick={() => openSection('notificaciones')}>
+            <Icon name="notifications" />
+            Notificaciones
+            {unseen > 0 ? <span className="platform-nav-count">{unseen > 99 ? '99+' : unseen}</span> : null}
+          </button>
           <button type="button" className={section === 'resumen' ? 'is-on' : ''} onClick={() => openSection('resumen')}>
             <Icon name="dashboard" />
             Resumen
@@ -377,24 +430,84 @@ export function GestionPage() {
               className="platform-bell"
               aria-label="Notificaciones"
               aria-expanded={noticesOpen}
-              onClick={() => setNoticesOpen((open) => !open)}
+              onClick={toggleNotices}
             >
               <Icon name="notifications" />
-              {pending.length > 0 ? <span className="platform-badge">{pending.length}</span> : null}
+              {unseen > 0 ? <span className="platform-badge">{unseen > 99 ? '99+' : unseen}</span> : null}
             </button>
             {noticesOpen ? (
               <div className="platform-notice-list" role="region" aria-label="Avisos">
-                {pending.length === 0 ? <p>No hay avisos nuevos.</p> : null}
-                {pending.slice(0, 6).map((guest) => (
-                  <p key={guest.id}>{guest.guestName} todavía no confirmó.</p>
-                ))}
-                {pending.length > 6 ? <p>Y {pending.length - 6} más.</p> : null}
+                {dropdown.length === 0 ? <p className="platform-notice-empty">No hay avisos en el desplegable.</p> : null}
+                <ul className="platform-notice-items">
+                  {dropdown.map((notice) => (
+                    <li key={notice.id}>
+                      <button type="button" className="platform-notice-item" onClick={() => openNotice(notice)}>
+                        <span className={`platform-notice-icon is-${notice.kind}`} aria-hidden="true">
+                          <Icon name={NOTICE_ICONS[notice.kind]} />
+                        </span>
+                        <span className="platform-notice-copy">
+                          <strong>{notice.title}</strong>
+                          <span>{notice.body}</span>
+                          <time dateTime={notice.at}>{formatDateTime(notice.at)}</time>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="platform-notice-actions">
+                  <button type="button" className="canvas-tool" onClick={() => openSection('notificaciones')}>
+                    <Icon name="list" />
+                    Ver todas
+                  </button>
+                  <button type="button" className="canvas-tool" disabled={dropdown.length === 0} onClick={clearDropdownNotices}>
+                    <Icon name="delete" />
+                    Limpiar
+                  </button>
+                </div>
+                {notices.length > DROPDOWN_LIMIT ? (
+                  <p className="platform-notice-hint">Mostramos las últimas {DROPDOWN_LIMIT}. El historial completo está en Ver todas.</p>
+                ) : null}
               </div>
             ) : null}
           </div>
         </header>
         <div className="platform-body">
       {error ? <p className="status">{error}</p> : null}
+
+      {section === 'notificaciones' ? (
+        <section className="canvas-section">
+          <header className="canvas-head">
+            <div>
+              <p className="eyebrow">Notificaciones</p>
+              <h2>Historial</h2>
+            </div>
+          </header>
+          {notices.length ? (
+            <ol className="notice-timeline">
+              {notices.map((notice) => {
+                const seen = noticePrefs.seenIds.includes(notice.id);
+                return (
+                  <li key={notice.id} className={seen ? 'is-seen' : 'is-new'}>
+                    <button type="button" className="notice-timeline-item" onClick={() => openNotice(notice)}>
+                      <span className={`platform-notice-icon is-${notice.kind}`} aria-hidden="true">
+                        <Icon name={NOTICE_ICONS[notice.kind]} />
+                      </span>
+                      <span className="notice-timeline-copy">
+                        <strong>{notice.title}</strong>
+                        <span>{notice.body}</span>
+                        <time dateTime={notice.at}>{formatDateTime(notice.at)}</time>
+                      </span>
+                      {!seen ? <span className="notice-new-dot" aria-label="Sin ver" /> : null}
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          ) : (
+            <p className="hint">Todavía no hay notificaciones.</p>
+          )}
+        </section>
+      ) : null}
 
       {section === 'resumen' ? (
         <section className="canvas-section">
