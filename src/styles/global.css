@@ -2126,6 +2126,12 @@ fieldset {
   color: #16356e;
 }
 
+.platform-nav button.is-disabled {
+  opacity: 0.45;
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
 .platform-side-foot {
   display: grid;
   gap: 0.25rem;
@@ -2175,13 +2181,34 @@ fieldset {
 }
 
 .platform-user {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
+  display: grid;
+  justify-items: end;
+  gap: 0.28rem;
   margin: 0;
   color: var(--ink);
   font-size: 0.92rem;
   font-weight: 500;
+}
+
+.platform-user-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.platform-closed-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.35rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: #f8e4e4;
+  color: #9b2c2c;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .platform-notices {
@@ -2696,6 +2723,12 @@ fieldset {
   color: #c23b3b;
 }
 
+.attendance-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .attendance-mark {
   display: inline-flex;
   align-items: center;
@@ -2707,6 +2740,21 @@ fieldset {
 .attendance-mark.is-wait,
 .attendance-mark.is-off { color: #c49212; }
 .attendance-mark.is-no { color: #c23b3b; }
+
+.attendance-late {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 999px;
+  background: #f8e4e4;
+  color: #9b2c2c;
+}
+
+.attendance-late .material-symbols-outlined {
+  font-size: 1rem;
+}
 
 .canvas-table.guests-table tr.is-revoked td {
   color: #9aabc4;
@@ -2782,7 +2830,7 @@ fieldset {
     overflow: hidden;
   }
 
-  .platform-user span {
+  .platform-user-name span {
     max-width: 6.2rem;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -2962,6 +3010,12 @@ fieldset {
   flex-direction: column;
   gap: 0.15rem;
   padding: 0.9rem 1rem;
+}
+
+.stat-aside {
+  font-size: 0.68em;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 .count-grid div {

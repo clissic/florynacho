@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate, RouterProvider, useParams } from 'react-router-dom';
 import { ApiProvider } from './lib/api';
-import { AdminLoginPage, AdminPage } from './pages/AdminPages';
+import { features } from './lib/features';
+import { AdminLoginPage } from './pages/AdminPages';
 import { GestionPage } from './pages/GestionPage';
 import { HomePage, InvitePage, PreviewPage } from './pages/publicPages';
 
@@ -8,7 +9,7 @@ const router = createBrowserRouter([
   { path: '/', element: <HomePage /> },
   { path: '/i/:token', element: <InvitePage /> },
   { path: '/admin/login', element: <AdminLoginPage /> },
-  { path: '/admin', element: <AdminPage /> },
+  { path: '/admin', element: <Navigate to="/gestion" replace /> },
   { path: '/gestion', element: <GestionPage /> },
   { path: '/validar/:token', element: <ValidateRedirect /> },
   { path: '/admin/preview', element: <PreviewPage /> },
@@ -17,6 +18,7 @@ const router = createBrowserRouter([
 
 function ValidateRedirect() {
   const { token = '' } = useParams();
+  if (!features.entryPass) return <Navigate to="/gestion" replace />;
   const safe = /^[a-f0-9]{32}$/i.test(token) ? token : '';
   return <Navigate to={safe ? `/gestion?entrada=${safe}` : '/gestion'} replace />;
 }

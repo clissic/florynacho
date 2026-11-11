@@ -1,31 +1,58 @@
+import { timingSafeEqual } from 'node:crypto';
 import type { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { parseSiteContent } from '../src/lib/content';
+import { deadlineHasPassed } from '../src/lib/dates';
 import { createToken, defaultBudgetItems, joinGuestName, splitGuestName, validateFloor, validateGuestDraft, validatePartyBudget, validateRsvp, cleanText, type RsvpPayload } from '../src/lib/validation';
 import { clearSessionCookie, requireAdmin, setSessionCookie, signSession } from './auth';
 import { BudgetModel, EventModel, FloorModel, InvitationModel, MessageModel, RsvpModel, SongModel, UserModel } from './models';
-import { consumeRateLimit } from './rateLimit';
+import { consumeLoginAttempt, consumeRateLimit } from './rateLimit';
 import { folderFromRequest, removeMedia, saveAudio, saveImage, upload } from './uploads';
+
+function sameSecret(left: string, right: string) {
+  const a = Buffer.from(left);
+  const b = Buffer.from(right);
+  if (a.length !== b.length) {
+    timingSafeEqual(a, a);
+    return false;
+  }
+  return timingSafeEqual(a, b);
+}
+
+function clientIp(req: Request) {
+  return req.ip || req.socket.remoteAddress || 'unknown';
+}
 
 function unavailable(_req: Request, res: Response) {
   res.status(200).json({ ok: false, error: 'unavailable' });
 }
 
-function presentRsvp(rsvp: {
-  attendance: string;
-  confirmedCount: number;
-  guestDietary?: string | null;
-  guestDietaryNote: string;
-  guestAllergies: string;
-  companionName: string;
-  companionDietary?: string | null;
-  companionDietaryNote: string;
-  companionAllergies: string;
-  childrenUnder12?: number;
-  children?: { name: string; givenName?: string; familyName?: string; dietary?: string | null; dietaryNote?: string; allergies?: string }[];
-  updatedAt?: Date;
-} | null | undefined) {
+function presentRsvp(
+  rsvp: {
+    attendance: string;
+    confirmedCount: number;
+    guestDietary?: string | null;
+    guestDietaryNote: string;
+    guestAllergies: string;
+    companionName: string;
+    companionDietary?: string | null;
+    companionDietaryNote: string;
+    companionAllergies: string;
+    childrenUnder12?: number;
+    children?: { name: string; givenName?: string; familyName?: string; dietary?: string | null; dietaryNote?: string; allergies?: string }[];
+    afterDeadline?: boolean;
+    createdAt?: Date;
+    updatedAt?: Date;
+  } | null | undefined,
+  deadline?: string | null,
+) {
   if (!rsvp) return null;
+  const raw = typeof (rsvp as { toObject?: () => Record<string, unknown> }).toObject === 'function'
+    ? (rsvp as { toObject: () => Record<string, unknown> }).toObject()
+    : (rsvp as Record<string, unknown>);
+  const afterDeadline = Object.prototype.hasOwnProperty.call(raw, 'afterDeadline')
+    ? Boolean(raw.afterDeadline)
+    : Boolean(deadline && rsvp.createdAt && deadlineHasPassed(deadline, new Date(rsvp.createdAt).getTime()));
   return {
     attendance: rsvp.attendance,
     confirmedCount: rsvp.confirmedCount,
@@ -48,8 +75,15 @@ function presentRsvp(rsvp: {
         allergies: child.allergies ?? '',
       };
     }),
+    afterDeadline,
     updatedAt: rsvp.updatedAt,
   };
+}
+
+async function eventDeadline(eventId: unknown) {
+  const event = await EventModel.findById(eventId);
+  const content = parseSiteContent(event?.published) ?? parseSiteContent(event?.draft);
+  return content?.rsvpDeadline ?? null;
 }
 
 function storedNames(body: { name?: string; givenName?: string; familyName?: string }) {
@@ -62,17 +96,18 @@ function storedNames(body: { name?: string; givenName?: string; familyName?: str
   return { guestName, ...splitGuestName(guestName) };
 }
 
-async function responseView(invitation: { _id: unknown; guestName: string; givenName?: string; slots: number }) {
-  const [rsvp, songs, message] = await Promise.all([
+async function responseView(invitation: { _id: unknown; eventId?: unknown; guestName: string; givenName?: string; slots: number }) {
+  const [rsvp, songs, message, deadline] = await Promise.all([
     RsvpModel.findOne({ invitationId: invitation._id }),
     SongModel.find({ invitationId: invitation._id }).sort({ createdAt: 1 }),
     MessageModel.findOne({ invitationId: invitation._id }),
+    eventDeadline(invitation.eventId),
   ]);
   return {
     guestName: invitation.guestName,
     givenName: invitation.givenName || splitGuestName(invitation.guestName).givenName,
     slots: invitation.slots as 1 | 2,
-    rsvp: presentRsvp(rsvp),
+    rsvp: presentRsvp(rsvp, deadline),
     songs: songs.map((song) => ({ title: song.title, artist: song.artist, comment: song.comment, link: song.link ?? '' })),
     message: message?.body ?? '',
   };
@@ -88,6 +123,16 @@ async function saveInvitationResponse(invitation: { _id: unknown; eventId: unkno
   const validated = validateRsvp(invitation.slots as 1 | 2, body);
   if (!validated.ok) return validated;
   const value = validated.value;
+  const [existing, deadline] = await Promise.all([
+    RsvpModel.findOne({ invitationId: invitation._id }),
+    eventDeadline(invitation.eventId),
+  ]);
+  const existingRaw = existing?.toObject?.() as Record<string, unknown> | undefined;
+  const afterDeadline = existing
+    ? Object.prototype.hasOwnProperty.call(existingRaw ?? {}, 'afterDeadline')
+      ? Boolean(existingRaw?.afterDeadline)
+      : Boolean(deadline && existing.createdAt && deadlineHasPassed(deadline, new Date(existing.createdAt).getTime()))
+    : Boolean(deadline && deadlineHasPassed(deadline));
   await RsvpModel.findOneAndUpdate(
     { invitationId: invitation._id },
     {
@@ -104,6 +149,7 @@ async function saveInvitationResponse(invitation: { _id: unknown; eventId: unkno
       companionAllergies: value.companionAllergies ?? '',
       childrenUnder12: value.childrenUnder12,
       children: value.children,
+      afterDeadline,
     },
     { upsert: true, new: true },
   );
@@ -275,7 +321,8 @@ export function registerRoutes(app: import('express').Express) {
 
   app.post('/api/invitations/:token/rsvp', async (req, res) => {
     const token = req.params.token;
-    if (!consumeRateLimit(token)) {
+    const ip = clientIp(req);
+    if (!consumeRateLimit(`ip:${ip}`, 100, 60 * 60 * 1000) || !consumeRateLimit(token)) {
       res.status(429).json({ ok: false, error: 'rate_limited', message: 'Demasiados intentos. Esperá un rato y probá de nuevo.' });
       return;
     }
@@ -291,10 +338,26 @@ export function registerRoutes(app: import('express').Express) {
   });
 
   app.post('/api/auth/login', async (req, res) => {
+    const key = clientIp(req);
+    if (!consumeLoginAttempt(key)) {
+      res.status(429).json({ ok: false, message: 'Demasiados intentos. Esperá unos segundos y probá de nuevo.' });
+      return;
+    }
     const email = String(req.body?.email ?? '').trim().toLowerCase();
     const password = String(req.body?.password ?? '');
+    const envEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+    const envPassword = process.env.ADMIN_PASSWORD || '';
     const user = await UserModel.findOne({ email });
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+
+    let accepted = false;
+    if (envPassword) {
+      const emailOk = envEmail ? email === envEmail : Boolean(user);
+      accepted = Boolean(user && emailOk && sameSecret(password, envPassword));
+    } else {
+      accepted = Boolean(user && (await bcrypt.compare(password, user.passwordHash)));
+    }
+
+    if (!user || !accepted) {
       res.status(401).json({ ok: false, message: 'El usuario o la contraseña no coinciden.' });
       return;
     }
@@ -312,7 +375,10 @@ export function registerRoutes(app: import('express').Express) {
   });
 
   app.get('/api/admin/guests', requireAdmin, async (req, res) => {
-    const invitations = await InvitationModel.find({ eventId: req.admin?.eventId }).sort({ guestName: 1 });
+    const [invitations, deadline] = await Promise.all([
+      InvitationModel.find({ eventId: req.admin?.eventId }).sort({ guestName: 1 }),
+      eventDeadline(req.admin?.eventId),
+    ]);
     const rsvps = await RsvpModel.find({ invitationId: { $in: invitations.map((item) => item._id) } });
     const byId = new Map(rsvps.map((item) => [String(item.invitationId), item]));
     res.json(
@@ -330,7 +396,7 @@ export function registerRoutes(app: import('express').Express) {
           notes: invitation.notes,
           createdAt: invitation.createdAt,
           accredited: Boolean(rsvp?.accreditedAt),
-          rsvp: presentRsvp(rsvp ?? null),
+          rsvp: presentRsvp(rsvp ?? null, deadline),
         };
       }),
     );
@@ -638,14 +704,30 @@ export function registerRoutes(app: import('express').Express) {
 
   app.get('/api/admin/messages', requireAdmin, async (req, res) => {
     const messages = await MessageModel.find({ eventId: req.admin?.eventId }).sort({ updatedAt: -1 });
-    const invitations = await InvitationModel.find({ _id: { $in: messages.map((message) => message.invitationId) } });
+    const invitationIds = messages.map((message) => message.invitationId);
+    const [invitations, rsvps] = await Promise.all([
+      InvitationModel.find({ _id: { $in: invitationIds } }),
+      RsvpModel.find({ invitationId: { $in: invitationIds } }),
+    ]);
     const names = new Map(invitations.map((item) => [String(item._id), item.guestName]));
-    res.json(messages.map((message) => ({
-      id: String(message._id),
-      guestName: names.get(String(message.invitationId)) ?? 'Invitado',
-      body: message.body,
-      updatedAt: message.updatedAt,
-    })));
+    const responses = new Map(rsvps.map((item) => [String(item.invitationId), item]));
+    res.json(messages.map((message) => {
+      const invitationId = String(message.invitationId);
+      const guestName = names.get(invitationId) ?? 'Invitado';
+      const rsvp = responses.get(invitationId);
+      const companionName =
+        rsvp?.attendance === 'yes_two' && (rsvp.companionName || '').trim()
+          ? rsvp.companionName.trim()
+          : null;
+      return {
+        id: String(message._id),
+        guestName,
+        companionName,
+        authors: companionName ? [guestName, companionName] : [guestName],
+        body: message.body,
+        updatedAt: message.updatedAt,
+      };
+    }));
   });
 
   app.get('/api/admin/draft', requireAdmin, async (req, res) => {

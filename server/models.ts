@@ -49,6 +49,7 @@ const rsvpSchema = new Schema(
     childrenUnder12: { type: Number, default: 0, min: 0, max: 10 },
     accreditedAt: { type: Date, default: null },
     accreditedCount: { type: Number, default: 0 },
+    afterDeadline: { type: Boolean, default: false },
     children: {
       type: [
         {

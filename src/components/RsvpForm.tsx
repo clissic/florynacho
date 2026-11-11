@@ -223,7 +223,7 @@ export function RsvpForm({ invitation, entryToken = '', deadline, songsEnabled, 
       <div className="rsvp-intro">
         <p className={late ? 'note' : 'lede'}>
           {late
-            ? 'La fecha que pedimos para confirmar ya pasó. Si todavía podés avisarnos, completá el formulario.'
+            ? 'Estás confirmando fuera de fecha. Completá el formulario igual, y por favor avisanos también por WhatsApp o llamada para que podamos tener en cuenta tus preferencias.'
             : `Te pedimos confirmar antes del ${formatDeadline(deadline)}.`}
         </p>
       </div>

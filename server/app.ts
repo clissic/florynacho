@@ -15,8 +15,18 @@ export async function createApp(mongoUri = process.env.MONGODB_URI || 'mongodb:/
   await seedIfEmpty();
 
   const app = express();
-  const origin = process.env.CLIENT_ORIGIN;
-  app.use(cors({ origin: origin || true, credentials: true }));
+  if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+  }
+
+  const configuredOrigin = (process.env.CLIENT_ORIGIN || '').trim();
+  if (process.env.NODE_ENV === 'production' && !configuredOrigin) {
+    // Misma origen (Express sirve dist): sin CORS reflectivo.
+    app.use(cors({ origin: false, credentials: true }));
+  } else {
+    app.use(cors({ origin: configuredOrigin || true, credentials: true }));
+  }
+
   app.use(cookieParser());
   app.use(express.json({ limit: '1mb' }));
   app.use('/media', express.static(mediaRoot()));

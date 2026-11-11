@@ -83,7 +83,7 @@ export function PreviewPage() {
       .getSession()
       .then(async (session) => {
         if (!session) {
-          window.location.replace('/admin/login');
+          window.location.replace(`/admin/login?next=${encodeURIComponent('/admin/preview')}`);
           return;
         }
         const draft = await api.getDraft();

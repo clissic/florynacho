@@ -7,6 +7,7 @@ export type StatsInput = {
     confirmedCount: number;
     guestDietary: Dietary | null;
     companionDietary: Dietary | null;
+    afterDeadline?: boolean;
   };
 };
 
@@ -14,6 +15,7 @@ export type WeddingStats = {
   sent: number;
   pending: number;
   confirmed: number;
+  confirmedLate: number;
   declined: number;
   attendees: number;
   companions: number;
@@ -26,6 +28,7 @@ export function summarizeGuests(guests: StatsInput[]): WeddingStats {
     sent: 0,
     pending: 0,
     confirmed: 0,
+    confirmedLate: 0,
     declined: 0,
     attendees: 0,
     companions: 0,
@@ -39,7 +42,10 @@ export function summarizeGuests(guests: StatsInput[]): WeddingStats {
       stats.pending += 1;
       continue;
     }
-    if (guest.rsvp.confirmedCount > 0) stats.confirmed += 1;
+    if (guest.rsvp.confirmedCount > 0) {
+      stats.confirmed += 1;
+      if (guest.rsvp.afterDeadline) stats.confirmedLate += 1;
+    }
     if (guest.rsvp.attendance === 'no') stats.declined += 1;
     stats.attendees += guest.rsvp.confirmedCount;
     if (guest.rsvp.attendance === 'yes_two') stats.companions += 1;

@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
-import { DEMO_TOKENS, defaultSite } from '../src/content/defaultSite';
+import { defaultSite } from '../src/content/defaultSite';
+import { DEMO_TOKENS } from './demoTokens';
 import { EventModel, InvitationModel, MessageModel, RsvpModel, SongModel, UserModel } from './models';
 
 const demoGuests = [
@@ -34,11 +35,22 @@ export async function seedIfEmpty() {
 
   const adminEmail = email || 'novios@florenciaeignacio.local';
   const adminPassword = password || 'cambiar-esta-clave';
-  const existingUser = await UserModel.findOne({ email: adminEmail });
+  const passwordHash = await bcrypt.hash(adminPassword, 12);
+
+  let existingUser = await UserModel.findOne({ eventId: event._id });
   if (!existingUser) {
+    existingUser = await UserModel.findOne({ email: adminEmail });
+  }
+
+  if (existingUser) {
+    existingUser.email = adminEmail;
+    existingUser.passwordHash = passwordHash;
+    existingUser.eventId = event._id;
+    await existingUser.save();
+  } else {
     await UserModel.create({
       email: adminEmail,
-      passwordHash: await bcrypt.hash(adminPassword, 12),
+      passwordHash,
       eventId: event._id,
     });
   }

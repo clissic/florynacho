@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DEMO_TOKENS } from '../content/defaultSite';
-import { diffParts, formatEventDate, formatEventTime, toUtcStamp } from './dates';
-import { parseGuestCsv, toCsv } from './csv';
-import { isSafeMapsUrl, parseSiteContent } from './content';
+import { DEMO_TOKENS } from '../../server/demoTokens';
 import { defaultSite } from '../content/defaultSite';
-import { summarizeGuests } from './stats';
+import { isSafeMapsUrl, parseSiteContent } from './content';
+import { parseGuestCsv, toCsv } from './csv';
+import { diffParts, formatEventDate, formatEventTime, toUtcStamp } from './dates';
 import { formatAmountFixed, formatAmountTyping, parseAmount } from './money';
+import { summarizeGuests } from './stats';
 import { emptyRsvp, validateFloor, validateRsvp, type RsvpPayload } from './validation';
 
 function payload(partial: Partial<RsvpPayload>): RsvpPayload {
@@ -203,11 +203,11 @@ describe('fechas y archivos', () => {
   it('resume asistentes y restricciones por persona', () => {
     const stats = summarizeGuests([
       { status: 'active', rsvp: null },
-      { status: 'active', rsvp: { attendance: 'yes_two', confirmedCount: 2, guestDietary: 'celiac', companionDietary: 'vegan' } },
+      { status: 'active', rsvp: { attendance: 'yes_two', confirmedCount: 2, guestDietary: 'celiac', companionDietary: 'vegan', afterDeadline: true } },
       { status: 'active', rsvp: { attendance: 'no', confirmedCount: 0, guestDietary: null, companionDietary: null } },
       { status: 'revoked', rsvp: { attendance: 'yes_one', confirmedCount: 1, guestDietary: 'none', companionDietary: null } },
     ]);
-    expect(stats).toMatchObject({ sent: 3, pending: 1, confirmed: 1, declined: 1, attendees: 2, companions: 1 });
+    expect(stats).toMatchObject({ sent: 3, pending: 1, confirmed: 1, confirmedLate: 1, declined: 1, attendees: 2, companions: 1 });
     expect(stats.dietary.find((item) => item.key === 'celiac')?.count).toBe(1);
     expect(stats.dietary.find((item) => item.key === 'vegan')?.count).toBe(1);
     expect(stats.dietary.find((item) => item.key === 'none')?.count).toBe(0);

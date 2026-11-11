@@ -25,6 +25,7 @@ export type SavedRsvp = {
   companionAllergies: string;
   childrenUnder12: number;
   children: { name: string; givenName: string; familyName: string; dietary: Dietary | null; dietaryNote: string; allergies: string }[];
+  afterDeadline: boolean;
   updatedAt: string;
 };
 
@@ -104,6 +105,8 @@ export type CheckInBoard = {
 export type MessageRow = {
   id: string;
   guestName: string;
+  companionName: string | null;
+  authors: string[];
   body: string;
   updatedAt: string;
 };

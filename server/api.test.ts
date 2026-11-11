@@ -5,8 +5,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
-import { DEMO_TOKENS } from '../src/content/defaultSite';
 import { createApp } from './app';
+import { DEMO_TOKENS } from './demoTokens';
 import { resetRateLimits } from './rateLimit';
 
 const admin = { email: 'novios@florenciaeignacio.local', password: 'cambiar-esta-clave' };
@@ -126,7 +126,19 @@ describe('confirmaciones en MongoDB', () => {
     expect(JSON.stringify(revoked.body)).not.toContain('Elena');
   });
 
+  it('limita los intentos de ingreso', async () => {
+    resetRateLimits();
+    for (let index = 0; index < 10; index += 1) {
+      const denied = await request(app).post('/api/auth/login').send({ email: admin.email, password: 'clave-incorrecta' });
+      expect(denied.status).toBe(401);
+    }
+    const blocked = await request(app).post('/api/auth/login').send(admin);
+    expect(blocked.status).toBe(429);
+    expect(blocked.body.message).toMatch(/Demasiados intentos/i);
+  });
+
   it('exige sesión para el panel y deja achicar cupos solo si la respuesta lo permite', async () => {
+    resetRateLimits();
     const hidden = await request(app).get('/api/admin/guests');
     expect(hidden.status).toBe(401);
 
@@ -168,6 +180,7 @@ describe('confirmaciones en MongoDB', () => {
 
   it('acredita una sola vez a las personas de la invitación', async () => {
     const agent = request.agent(app);
+    resetRateLimits();
     await agent.post('/api/auth/login').send(admin);
 
     const stranger = await request(app).post('/api/admin/check-in').send({ token: DEMO_TOKENS.martin });
@@ -191,6 +204,7 @@ describe('confirmaciones en MongoDB', () => {
 
   it('guarda el presupuesto y los ítems de la fiesta', async () => {
     const agent = request.agent(app);
+    resetRateLimits();
     await agent.post('/api/auth/login').send(admin);
     const empty = await agent.get('/api/admin/budget');
     expect(empty.body).toEqual({ total: null, currency: null, items: [] });
@@ -230,6 +244,7 @@ describe('confirmaciones en MongoDB', () => {
 
   it('deja que el administrador confirme incluso una invitación desactivada', async () => {
     const agent = request.agent(app);
+    resetRateLimits();
     await agent.post('/api/auth/login').send(admin);
     const guests = await agent.get('/api/admin/guests');
     const elena = guests.body.find((guest: { guestName: string }) => guest.guestName === 'Elena Castro');

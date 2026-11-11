@@ -2,18 +2,30 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { FloorBoard } from '../admin/FloorBoard';
 import { BudgetBoard } from '../admin/BudgetBoard';
+import { ContentPanel } from '../admin/ContentPanel';
 import { ValidationBoard } from '../admin/ValidationBoard';
 import { Icon } from '../components/Icon';
 import { RsvpForm } from '../components/RsvpForm';
 import { DIETARY_OPTIONS, type Dietary } from '../content/defaultSite';
 import { useApi } from '../lib/api';
+import { features } from '../lib/features';
 import { downloadCsv, parseGuestCsv, toCsv } from '../lib/csv';
-import type { FloorPlan, FloorSeatPerson, GuestRow, InvitationData, SongRow } from '../lib/models';
+import { deadlineHasPassed, formatDateTime } from '../lib/dates';
+import type { FloorPlan, FloorSeatPerson, GuestRow, InvitationData, MessageRow, SongRow } from '../lib/models';
 import { seatKey } from '../lib/floor';
 import { dietaryLabel, summarizeGuests } from '../lib/stats';
 import { SetupNotice } from './SetupNotice';
 
 const PAGE_SIZE = 25;
+const MESSAGE_PAGE_SIZE = 10;
+
+type Section = 'resumen' | 'invitados' | 'mesas' | 'canciones' | 'mensajes' | 'personalizar' | 'validacion' | 'administracion';
+
+function authorsLabel(authors: string[]) {
+  if (authors.length <= 1) return authors[0] || 'Invitado';
+  if (authors.length === 2) return `${authors[0]} y ${authors[1]}`;
+  return `${authors.slice(0, -1).join(', ')} y ${authors[authors.length - 1]}`;
+}
 const emptyPlan: FloorPlan = { tables: [], chairs: [], walls: [], openings: [], objects: [] };
 
 function attendanceLabel(guest: GuestRow) {
@@ -113,8 +125,10 @@ export function GestionPage() {
   const [params] = useSearchParams();
   const entrada = /^[a-f0-9]{32}$/i.test(params.get('entrada') ?? '') ? (params.get('entrada') ?? '') : '';
   const [email, setEmail] = useState<string | null | undefined>(undefined);
-  const [section, setSection] = useState<'resumen' | 'invitados' | 'mesas' | 'canciones' | 'validacion' | 'administracion'>(entrada ? 'validacion' : 'invitados');
+  const [section, setSection] = useState<Section>(entrada && features.entryPass ? 'validacion' : 'invitados');
   const [guests, setGuests] = useState<GuestRow[]>([]);
+  const [messages, setMessages] = useState<MessageRow[]>([]);
+  const [messagePage, setMessagePage] = useState(1);
   const [plan, setPlan] = useState<FloorPlan>(emptyPlan);
   const [nameQuery, setNameQuery] = useState('');
   const [dietary, setDietary] = useState('');
@@ -147,9 +161,15 @@ export function GestionPage() {
 
   async function reload() {
     if (!api) return;
-    const [nextGuests, nextPlan, nextSongs] = await Promise.all([api.listGuests(), api.getFloor(), api.listSongs()]);
+    const [nextGuests, nextPlan, nextSongs, nextMessages] = await Promise.all([
+      api.listGuests(),
+      api.getFloor(),
+      api.listSongs(),
+      api.listMessages(),
+    ]);
     setGuests(nextGuests);
     setSongs(nextSongs);
+    setMessages(nextMessages);
     setPlan(keepEligible(nextPlan, seatPeople(nextGuests)));
   }
 
@@ -217,6 +237,7 @@ export function GestionPage() {
       }
       if (attendance === 'pending' && attendanceLabel(guest) !== 'Pendiente') return false;
       if (attendance === 'confirmed' && attendanceLabel(guest) !== 'Confirmó' && attendanceLabel(guest) !== 'Confirmaron los dos') return false;
+      if (attendance === 'late' && !guest.rsvp?.afterDeadline) return false;
       if (attendance === 'revoked' && attendanceLabel(guest) !== 'Desactivada') return false;
       if (children !== '') {
         if (!guest.rsvp || guest.rsvp.childrenUnder12 !== Number(children)) return false;
@@ -258,13 +279,18 @@ export function GestionPage() {
   if (!email) return <Navigate to={`/admin/login?next=${encodeURIComponent(entrada ? `/gestion?entrada=${entrada}` : '/gestion')}`} replace />;
 
   const pending = guests.filter((guest) => guest.status === 'active' && !guest.rsvp);
+  const confirmationsClosed = deadlineHasPassed(formFlags.deadline);
   const stats = summarizeGuests(guests.map((guest) => ({ status: guest.status, rsvp: guest.rsvp })));
 
-  function openSection(next: 'resumen' | 'invitados' | 'mesas' | 'canciones' | 'validacion' | 'administracion') {
+  function openSection(next: Section) {
     setSection(next);
     setMenuOpen(false);
     setNoticesOpen(false);
   }
+
+  const messagePages = Math.max(1, Math.ceil(messages.length / MESSAGE_PAGE_SIZE));
+  const currentMessagePage = Math.min(messagePage, messagePages);
+  const visibleMessages = messages.slice((currentMessagePage - 1) * MESSAGE_PAGE_SIZE, currentMessagePage * MESSAGE_PAGE_SIZE);
 
   return (
     <div className="admin platform">
@@ -288,7 +314,24 @@ export function GestionPage() {
             <Icon name="music_note" />
             Canciones
           </button>
-          <button type="button" className={section === 'validacion' ? 'is-on' : ''} onClick={() => openSection('validacion')}>
+          <button type="button" className={section === 'mensajes' ? 'is-on' : ''} onClick={() => openSection('mensajes')}>
+            <Icon name="mail" />
+            Mensajes
+          </button>
+          <button type="button" className={section === 'personalizar' ? 'is-on' : ''} onClick={() => openSection('personalizar')}>
+            <Icon name="edit" />
+            Personalizar
+          </button>
+          <button
+            type="button"
+            className={`${section === 'validacion' && features.entryPass ? 'is-on' : ''}${features.entryPass ? '' : ' is-disabled'}`.trim()}
+            title={features.entryPass ? undefined : 'Deshabilitado'}
+            aria-disabled={!features.entryPass}
+            onClick={() => {
+              if (!features.entryPass) return;
+              openSection('validacion');
+            }}
+          >
             <Icon name="qr_code_scanner" />
             Validación
           </button>
@@ -321,10 +364,13 @@ export function GestionPage() {
             <Icon name="menu" />
           </button>
           <p className="platform-wedding">Florencia & Ignacio</p>
-          <p className="platform-user">
-            <Icon name="person" />
-            <span>{email}</span>
-          </p>
+          <div className="platform-user">
+            <p className="platform-user-name">
+              <Icon name="person" />
+              <span>{email}</span>
+            </p>
+            {confirmationsClosed ? <span className="platform-closed-badge">Confirmaciones cerradas</span> : null}
+          </div>
           <div className="platform-notices">
             <button
               type="button"
@@ -361,7 +407,7 @@ export function GestionPage() {
           <div className="stat-grid">
             <Stat label="Enviadas" value={stats.sent} />
             <Stat label="Pendientes" value={stats.pending} />
-            <Stat label="Confirmadas" value={stats.confirmed} />
+            <Stat label="Total confirmadas (fuera de fecha)" value={stats.confirmed} aside={stats.confirmedLate} />
             <Stat label="Rechazadas" value={stats.declined} />
             <Stat label="Asistentes" value={stats.attendees} />
             <Stat label="Acompañantes" value={stats.companions} />
@@ -598,6 +644,7 @@ export function GestionPage() {
                 <option value="">Cualquiera</option>
                 <option value="pending">Pendiente</option>
                 <option value="confirmed">Confirmó</option>
+                <option value="late">Fuera de fecha</option>
                 <option value="revoked">Desactivada</option>
               </select>
             </label>
@@ -651,8 +698,15 @@ export function GestionPage() {
                     <tr key={guest.id} className={guest.status === 'revoked' ? 'is-revoked' : undefined}>
                       <td>{guest.guestName}</td>
                       <td>
-                        <span className={`attendance-mark ${attendanceMark(guest).tone}`} title={attendanceLabel(guest)} aria-label={attendanceLabel(guest)}>
-                          <Icon name={attendanceMark(guest).icon} />
+                        <span className="attendance-cell">
+                          <span className={`attendance-mark ${attendanceMark(guest).tone}`} title={attendanceLabel(guest)} aria-label={attendanceLabel(guest)}>
+                            <Icon name={attendanceMark(guest).icon} />
+                          </span>
+                          {guest.rsvp?.afterDeadline ? (
+                            <span className="attendance-late" title="Fuera de fecha" aria-label="Fuera de fecha">
+                              <Icon name="calendar_month" />
+                            </span>
+                          ) : null}
                         </span>
                       </td>
                       <td>{dietText(guest)}</td>
@@ -769,6 +823,23 @@ export function GestionPage() {
               <p className="eyebrow">Canciones</p>
               <h2>Lo que pidieron</h2>
             </div>
+            <button
+              type="button"
+              className="btn btn-outline-primary button button-secondary"
+              disabled={songs.length === 0}
+              onClick={() =>
+                downloadCsv(
+                  'canciones-florencia-ignacio.csv',
+                  toCsv(
+                    ['invitado', 'cancion', 'artista', 'comentario', 'enlace', 'fecha'],
+                    songs.map((song) => [song.guestName, song.title, song.artist, song.comment, song.link, formatDateTime(song.createdAt)]),
+                  ),
+                )
+              }
+            >
+              <Icon name="download" />
+              Exportar CSV
+            </button>
           </header>
           {songs.length ? (
             <>
@@ -818,7 +889,74 @@ export function GestionPage() {
             <p className="hint">Todavía no hay canciones guardadas.</p>
           )}
         </section>
-      ) : section === 'validacion' ? (
+      ) : section === 'mensajes' ? (
+        <section className="canvas-section">
+          <header className="canvas-head">
+            <div>
+              <p className="eyebrow">Mensajes</p>
+              <h2>Para los novios</h2>
+            </div>
+            <button
+              type="button"
+              className="btn btn-outline-primary button button-secondary"
+              disabled={messages.length === 0}
+              onClick={() =>
+                downloadCsv(
+                  'mensajes-florencia-ignacio.csv',
+                  toCsv(
+                    ['autores', 'mensaje', 'fecha'],
+                    messages.map((message) => [authorsLabel(message.authors), message.body, formatDateTime(message.updatedAt)]),
+                  ),
+                )
+              }
+            >
+              <Icon name="download" />
+              Exportar CSV
+            </button>
+          </header>
+          {messages.length ? (
+            <>
+              <div className="table-scroll canvas-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Quién escribió</th>
+                      <th>Mensaje</th>
+                      <th>Fecha</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleMessages.map((message) => (
+                      <tr key={message.id}>
+                        <td>{authorsLabel(message.authors)}</td>
+                        <td>{message.body}</td>
+                        <td>{formatDateTime(message.updatedAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="canvas-pages">
+                <button type="button" className="icon-action" aria-label="Página anterior" disabled={currentMessagePage <= 1} onClick={() => setMessagePage(currentMessagePage - 1)}>
+                  <Icon name="arrow_back" />
+                </button>
+                <p>
+                  {messages.length} mensajes · Página {currentMessagePage} de {messagePages}
+                </p>
+                <button type="button" className="icon-action" aria-label="Página siguiente" disabled={currentMessagePage >= messagePages} onClick={() => setMessagePage(currentMessagePage + 1)}>
+                  <Icon name="arrow_forward" />
+                </button>
+              </div>
+            </>
+          ) : (
+            <p className="hint">Todavía no hay mensajes.</p>
+          )}
+        </section>
+      ) : section === 'personalizar' ? (
+        <section className="canvas-section">
+          <ContentPanel />
+        </section>
+      ) : section === 'validacion' && features.entryPass ? (
         <ValidationBoard api={api} pendingToken={entrada} />
       ) : section === 'administracion' ? (
         <BudgetBoard api={api} />
@@ -865,10 +1003,13 @@ export function GestionPage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ label, value, aside }: { label: string; value: number; aside?: number }) {
   return (
     <article className="stat">
-      <strong>{value}</strong>
+      <strong>
+        {value}
+        {aside !== undefined ? <small className="stat-aside"> ({aside})</small> : null}
+      </strong>
       <span>{label}</span>
     </article>
   );
