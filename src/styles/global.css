@@ -1890,6 +1890,53 @@ fieldset {
   z-index: 30;
 }
 
+.invitation-toast-host {
+  z-index: 35;
+  max-width: min(26rem, calc(100vw - 1.5rem));
+}
+
+.invitation-toast {
+  width: 100%;
+  border: 1px solid #d4deec;
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 14px 30px rgba(22, 53, 110, 0.14);
+  overflow: hidden;
+}
+
+.invitation-toast .toast-header {
+  gap: 0.65rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #d4deec;
+  background: var(--ivory);
+  color: #16356e;
+}
+
+.invitation-toast .toast-header strong {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: 1.2rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.invitation-toast .toast-body {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  color: var(--ink);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.invitation-toast .toast-body p {
+  margin: 0;
+}
+
+.invitation-toast-thanks {
+  color: #16356e;
+  font-weight: 500;
+}
+
 .player.is-concealed {
   visibility: hidden;
   pointer-events: none;

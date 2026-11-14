@@ -5,6 +5,7 @@ import type { RsvpPayload } from '../lib/validation';
 import { downloadIcs, googleCalendarUrl } from '../lib/calendar';
 import { diffParts, formatEventDate, formatEventDay, formatEventMonth, formatEventTime } from '../lib/dates';
 import { pauseMusic, startMusicFromGesture } from '../lib/player';
+import { AdultsToast } from './AdultsToast';
 import { CopyButton } from './CopyButton';
 import { Icon } from './Icon';
 import { MusicPlayer } from './MusicPlayer';
@@ -265,6 +266,7 @@ export function InvitationView({ site, mode, invitation = null, entryToken = '',
         title={content.musicTitle}
         concealed={!entered}
       />
+      {entered ? <AdultsToast /> : null}
       </div>
     </div>
   );
